@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Transparent Government Budget dApp</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; max-width: 900px; margin: auto;
+    }
+    h1 { color: #1a237e; text-align: center; }
+    section {
+      background: white; box-shadow: 0 2px 10px rgb(0 0 0 / 0.1); padding: 15px; margin: 20px 0; border-radius: 8px;
+    }
+    input, button {
+      display: block; width: 100%; padding: 8px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd;
+      font-size: 1em;
+    }
+    button {
+      background-color: #1a73e8; color: white; border: none; cursor: pointer;
+    }
+    button:hover {
+      background-color: #0c50b6;
+    }
+    #account {
+      font-weight: bold; color: #333; text-align: center; margin-bottom: 20px;
+    }
+    .error {
+      color: red; font-weight: bold; margin-top: -8px; margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Transparent Government Budget dApp</h1>
+
+<div id="account">Wallet not connected</div>
+<button onclick="connectWallet()">Connect Wallet</button>
+
+<section>
+  <h2>Admin Functions</h2>
+  <input id="budgetName" placeholder="Budget Category Name" />
+  <input id="budgetAmount" placeholder="Total Allocated (ETH)" type="number" step="0.0001" />
+  <button onclick="createBudgetCategory()">Create Budget Category</button>
+
+  <input id="depositAmount" placeholder="Deposit Amount (ETH)" type="number" step="0.0001" />
+  <button onclick="depositFunds()">Deposit Funds to Contract</button>
+
+  <input id="grantOfficialAddress" placeholder="Grant OFFICIAL_ROLE to Address" />
+  <button onclick="grantOfficialRole()">Grant Official Role</button>
+
+  <input id="revokeOfficialAddress" placeholder="Revoke OFFICIAL_ROLE from Address" />
+  <button onclick="revokeOfficialRole()">Revoke Official Role</button>
+</section>
+
+<section>
+  <h2>Proposal Submission</h2>
+  <input id="proposalCategoryId" placeholder="Budget Category ID" type="number" />
+  <input id="proposalDescription" placeholder="Description" />
+  <input id="proposalRecipient" placeholder="Recipient Address" />
+  <input id="proposalRequestedAmount" placeholder="Requested Amount (ETH)" type="number" step="0.0001" />
+  <button onclick="submitProposal()">Submit Proposal</button>
+</section>
+
+<section>
+  <h2>Official Functions</h2>
+  <input id="proposalId" placeholder="Proposal ID" type="number" />
+  <button onclick="approveProposal()">Approve Proposal</button>
+  <button onclick="rejectProposal()">Reject Proposal</button>
+
+  <input id="milestoneIndex" placeholder="Milestone Index (for funding)" type="number" />
+  <button onclick="fundMilestone()">Fund Milestone</button>
+</section>
+
+<section>
+  <h2>Citizen Actions</h2>
+  <input id="flagProposalId" placeholder="Proposal ID to Flag" type="number" />
+  <input id="flagReason" placeholder="Reason for Flagging" />
+  <button onclick="flagSuspicious()">Flag Suspicious Proposal</button>
+</section>
+
+<section>
+  <h2>Emergency Fund Disbursement</h2>
+  <input id="emergencyProposalId" placeholder="Proposal ID" type="number" />
+  <input id="requiredApprovals" placeholder="Required Approvals Count" type="number" />
+  <button onclick="disburseEmergencyFund()">Disburse Emergency Fund</button>
+</section>
+
+<div id="status" style="margin-top:20px; color: green; font-weight: bold;"></div>
+
+<script>
+  // Replace with your deployed contract address
+  const CONTRACT_ADDRESS = "0xYourDeployedContractAddress";
+
+  // ABI matching your smart contract (simplified)
+  const CONTRACT_ABI = [
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "AccessControlBadConfirmation",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "neededRole",
+				"type": "bytes32"
+			}
+		],
+		"name": "AccessControlUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "ReentrancyGuardReentrantCall",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "categoryId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "totalAllocated",
+				"type": "uint256"
+			}
+		],
+		"name": "BudgetCreated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "EmergencyFundDisbursed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "depositor",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "FundsDeposited",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "milestoneIndex",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "MilestoneFunded",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "approver",
+				"type": "address"
+			}
+		],
+		"name": "ProposalApproved",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "flagger",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "reason",
+				"type": "string"
+			}
+		],
+		"name": "ProposalFlagged",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "rejector",
+				"type": "address"
+			}
+		],
+		"name": "ProposalRejected",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "budgetCategoryId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "ProposalSubmitted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "previousAdminRole",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "newAdminRole",
+				"type": "bytes32"
+			}
+		],
+		"name": "RoleAdminChanged",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			}
+		],
+		"name": "RoleGranted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			}
+		],
+		"name": "RoleRevoked",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "DEFAULT_ADMIN_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "GOV_ADMIN_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "OFFICIAL_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string[]",
+				"name": "_descriptions",
+				"type": "string[]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "_amounts",
+				"type": "uint256[]"
+			}
+		],
+		"name": "addMilestones",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "approveProposal",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "budgetCategories",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "categoryId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalAllocated",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalSpent",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "exists",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_totalAllocated",
+				"type": "uint256"
+			}
+		],
+		"name": "createBudgetCategory",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "depositFunds",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_requiredApprovals",
+				"type": "uint256"
+			}
+		],
+		"name": "disburseEmergencyFund",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "emergencyWithdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "_reason",
+				"type": "string"
+			}
+		],
+		"name": "flagSuspiciousProposal",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "flaggedReasons",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_milestoneIndex",
+				"type": "uint256"
+			}
+		],
+		"name": "fundMilestone",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getContractBalance",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "getFlaggedReasons",
+		"outputs": [
+			{
+				"internalType": "string[]",
+				"name": "",
+				"type": "string[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getNextCategoryId",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getNextProposalId",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "getProposalDetails",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "proposalId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "budgetCategoryId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "description",
+						"type": "string"
+					},
+					{
+						"internalType": "address payable",
+						"name": "recipient",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "requestedAmount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amountPaid",
+						"type": "uint256"
+					},
+					{
+						"internalType": "enum TransparentGovernmentBudget.ProposalStatus",
+						"name": "status",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint256",
+						"name": "approvalCount",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct TransparentGovernmentBudget.Proposal",
+				"name": "",
+				"type": "tuple"
+			},
+			{
+				"components": [
+					{
+						"internalType": "string",
+						"name": "description",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "funded",
+						"type": "bool"
+					}
+				],
+				"internalType": "struct TransparentGovernmentBudget.Milestone[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "getProposalMilestones",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "string",
+						"name": "description",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "funded",
+						"type": "bool"
+					}
+				],
+				"internalType": "struct TransparentGovernmentBudget.Milestone[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			}
+		],
+		"name": "getRoleAdmin",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_official",
+				"type": "address"
+			}
+		],
+		"name": "grantOfficialRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "grantRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "hasRole",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "proposalApprovals",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "proposalMilestones",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "funded",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "proposals",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "budgetCategoryId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			},
+			{
+				"internalType": "address payable",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "requestedAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amountPaid",
+				"type": "uint256"
+			},
+			{
+				"internalType": "enum TransparentGovernmentBudget.ProposalStatus",
+				"name": "status",
+				"type": "uint8"
+			},
+			{
+				"internalType": "uint256",
+				"name": "approvalCount",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "rejectProposal",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "callerConfirmation",
+				"type": "address"
+			}
+		],
+		"name": "renounceRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_official",
+				"type": "address"
+			}
+		],
+		"name": "revokeOfficialRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "revokeRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_budgetCategoryId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "_description",
+				"type": "string"
+			},
+			{
+				"internalType": "address payable",
+				"name": "_recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_requestedAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "submitProposal",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes4",
+				"name": "interfaceId",
+				"type": "bytes4"
+			}
+		],
+		"name": "supportsInterface",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_categoryId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_newAllocation",
+				"type": "uint256"
+			}
+		],
+		"name": "updateBudgetAllocation",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"stateMutability": "payable",
+		"type": "receive"
+	}
+];
+
+  let provider, signer, contract;
+  let roles = {};
+
+  async function connectWallet() {
+    try {
+      if (!window.ethereum) {
+        alert("MetaMask or compatible wallet is required");
+        return;
+      }
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = provider.getSigner();
+      contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      const account = await signer.getAddress();
+      document.getElementById("account").innerText = Connected: ${account};
+
+      // Fetch roles bytes32 values from contract for local checks if needed
+      roles.govAdmin = await contract.GOV_ADMIN_ROLE();
+      roles.official = await contract.OFFICIAL_ROLE();
+
+      setStatus("Wallet connected and contract ready.");
+    } catch (error) {
+      setStatus(Error connecting wallet: ${error.message}, true);
+    }
+  }
+
+  function setStatus(message, isError = false) {
+    const statusEl = document.getElementById("status");
+    statusEl.style.color = isError ? "red" : "green";
+    statusEl.innerText = message;
+  }
+
+  async function createBudgetCategory() {
+    try {
+      const name = document.getElementById("budgetName").value.trim();
+      const amountEth = document.getElementById("budgetAmount").value.trim();
+      if (!name || !amountEth) {
+        setStatus("Please provide category name and amount.", true);
+        return;
+      }
+      const amount = ethers.utils.parseEther(amountEth);
+      const tx = await contract.createBudgetCategory(name, amount);
+      await tx.wait();
+      setStatus("Budget category created successfully.");
+    } catch (error) {
+      setStatus(Error creating budget category: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function depositFunds() {
+    try {
+      const amountEth = document.getElementById("depositAmount").value.trim();
+      if (!amountEth) {
+        setStatus("Please enter deposit amount.", true);
+        return;
+      }
+      const amount = ethers.utils.parseEther(amountEth);
+      const tx = await contract.depositFunds({ value: amount });
+      await tx.wait();
+      setStatus("Funds deposited successfully.");
+    } catch (error) {
+      setStatus(Error depositing funds: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function grantOfficialRole() {
+    try {
+      const addr = document.getElementById("grantOfficialAddress").value.trim();
+      if (!ethers.utils.isAddress(addr)) {
+        setStatus("Invalid address for granting role.", true);
+        return;
+      }
+      const tx = await contract.grantOfficialRole(addr);
+      await tx.wait();
+      setStatus("Official role granted.");
+    } catch (error) {
+      setStatus(Error granting official role: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function revokeOfficialRole() {
+    try {
+      const addr = document.getElementById("revokeOfficialAddress").value.trim();
+      if (!ethers.utils.isAddress(addr)) {
+        setStatus("Invalid address for revoking role.", true);
+        return;
+      }
+      const tx = await contract.revokeOfficialRole(addr);
+      await tx.wait();
+      setStatus("Official role revoked.");
+    } catch (error) {
+      setStatus(Error revoking official role: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function submitProposal() {
+    try {
+      const categoryId = document.getElementById("proposalCategoryId").value.trim();
+      const description = document.getElementById("proposalDescription").value.trim();
+      const recipient = document.getElementById("proposalRecipient").value.trim();
+      const amountEth = document.getElementById("proposalRequestedAmount").value.trim();
+
+      if (!categoryId || !description || !recipient || !amountEth) {
+        setStatus("Please fill in all proposal fields.", true);
+        return;
+      }
+      if (!ethers.utils.isAddress(recipient)) {
+        setStatus("Invalid recipient address.", true);
+        return;
+      }
+
+      const amount = ethers.utils.parseEther(amountEth);
+
+      const tx = await contract.submitProposal(
+        Number(categoryId),
+        description,
+        recipient,
+        amount
+      );
+      await tx.wait();
+      setStatus("Proposal submitted successfully.");
+    } catch (error) {
+      setStatus(Error submitting proposal: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function approveProposal() {
+    try {
+      const proposalId = document.getElementById("proposalId").value.trim();
+      if (!proposalId) {
+        setStatus("Please provide proposal ID.", true);
+        return;
+      }
+      const tx = await contract.approveProposal(Number(proposalId));
+      await tx.wait();
+      setStatus("Proposal approved successfully.");
+    } catch (error) {
+      setStatus(Error approving proposal: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function rejectProposal() {
+    try {
+      const proposalId = document.getElementById("proposalId").value.trim();
+      if (!proposalId) {
+        setStatus("Please provide proposal ID.", true);
+        return;
+      }
+      const tx = await contract.rejectProposal(Number(proposalId));
+      await tx.wait();
+      setStatus("Proposal rejected successfully.");
+    } catch (error) {
+      setStatus(Error rejecting proposal: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function fundMilestone() {
+    try {
+      const proposalId = document.getElementById("proposalId").value.trim();
+      const milestoneIndex = document.getElementById("milestoneIndex").value.trim();
+      if (!proposalId || milestoneIndex === '') {
+        setStatus("Please provide proposal ID and milestone index.", true);
+        return;
+      }
+      const tx = await contract.fundMilestone(Number(proposalId), Number(milestoneIndex));
+      await tx.wait();
+      setStatus("Milestone funded successfully.");
+    } catch (error) {
+      setStatus(Error funding milestone: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function flagSuspicious() {
+    try {
+      const proposalId = document.getElementById("flagProposalId").value.trim();
+      const reason = document.getElementById("flagReason").value.trim();
+      if (!proposalId || !reason) {
+        setStatus("Please provide proposal ID and reason.", true);
+        return;
+      }
+      const tx = await contract.flagSuspiciousProposal(Number(proposalId), reason);
+      await tx.wait();
+      setStatus("Proposal flagged successfully.");
+    } catch (error) {
+      setStatus(Error flagging proposal: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  async function disburseEmergencyFund() {
+    try {
+      const proposalId = document.getElementById("emergencyProposalId").value.trim();
+      const requiredApprovals = document.getElementById("requiredApprovals").value.trim();
+      if (!proposalId || !requiredApprovals) {
+        setStatus("Please provide proposal ID and required approvals.", true);
+        return;
+      }
+      const tx = await contract.disburseEmergencyFund(Number(proposalId), Number(requiredApprovals));
+      await tx.wait();
+      setStatus("Emergency fund disbursed successfully.");
+    } catch (error) {
+      setStatus(Error disbursing emergency fund: ${parseErrorMessage(error)}, true);
+    }
+  }
+
+  // Utility to parse revert reasons from error object
+  function parseErrorMessage(error) {
+    if (error.error && error.error.message) {
+      return error.error.message;
+    }
+    if (error.data && error.data.message) {
+      return error.data.message;
+    }
+    return error.message || String(error);
+  }
+</script>
+
+</body>
+</html>
