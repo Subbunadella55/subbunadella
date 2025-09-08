@@ -1,99 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Transparent Government Budget dApp</title>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; max-width: 900px; margin: auto;
-    }
-    h1 { color: #1a237e; text-align: center; }
-    section {
-      background: white; box-shadow: 0 2px 10px rgb(0 0 0 / 0.1); padding: 15px; margin: 20px 0; border-radius: 8px;
-    }
-    input, button {
-      display: block; width: 100%; padding: 8px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd;
-      font-size: 1em;
-    }
-    button {
-      background-color: #1a73e8; color: white; border: none; cursor: pointer;
-    }
-    button:hover {
-      background-color: #0c50b6;
-    }
-    #account {
-      font-weight: bold; color: #333; text-align: center; margin-bottom: 20px;
-    }
-    .error {
-      color: red; font-weight: bold; margin-top: -8px; margin-bottom: 8px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transparent Government Budget DApp</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f9; color: #333; margin: 0; padding: 2rem; }
+        .container { max-width: 1000px; margin: auto; background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        button { background-color: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
+        button:hover { background-color: #2980b9; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        .hidden { display: none; }
+        .role-section { background-color: #ecf0f1; border: 1px solid #dcdcdc; padding: 1.5rem; margin-top: 1.5rem; border-radius: 5px; }
+        form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1rem; }
+        input { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        .card-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+        .card { border: 1px solid #ddd; padding: 1rem; border-radius: 5px; background-color: #fafafa; }
+        .card p { margin: 5px 0; }
+        .status-PENDING { color: #f39c12; }
+        .status-APPROVED { color: #27ae60; }
+        .status-REJECTED { color: #c0392b; }
+        .status-COMPLETED { color: #2980b9; }
+        #status, #walletInfo { text-align: right; font-size: 0.9em; color: #7f8c8d; }
+    </style>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
 </head>
 <body>
 
-<h1>Transparent Government Budget dApp</h1>
+    <div class="container">
+        <div class="header">
+            <h1>Transparent Budget DApp</h1>
+            <div>
+                <button id="connectWalletBtn">Connect Wallet</button>
+                <div id="walletInfo">Not Connected</div>
+            </div>
+        </div>
 
-<div id="account">Wallet not connected</div>
-<button onclick="connectWallet()">Connect Wallet</button>
+        <div id="status"></div>
+        <hr>
 
-<section>
-  <h2>Admin Functions</h2>
-  <input id="budgetName" placeholder="Budget Category Name" />
-  <input id="budgetAmount" placeholder="Total Allocated (ETH)" type="number" step="0.0001" />
-  <button onclick="createBudgetCategory()">Create Budget Category</button>
+        <div id="adminSection" class="role-section hidden">
+            <h2>🚨 Admin Panel</h2>
+            <form id="depositForm">
+                <h3>Deposit Funds into Contract</h3>
+                <input type="text" id="depositAmount" placeholder="Amount in ETH" required>
+                <button type="submit">Deposit</button>
+            </form>
+            <form id="createCategoryForm">
+                <h3>Create Budget Category</h3>
+                <input type="text" id="categoryName" placeholder="Category Name (e.g., Healthcare)" required>
+                <input type="text" id="categoryAllocation" placeholder="Total Allocation (in Wei)" required>
+                <button type="submit">Create Category</button>
+            </form>
+            <form id="grantRoleForm">
+                <h3>Grant Official Role</h3>
+                <input type="text" id="officialAddress" placeholder="Address of new official" required>
+                <button type="submit">Grant Role</button>
+            </form>
+        </div>
 
-  <input id="depositAmount" placeholder="Deposit Amount (ETH)" type="number" step="0.0001" />
-  <button onclick="depositFunds()">Deposit Funds to Contract</button>
+        <div id="officialSection" class="role-section hidden">
+            <h2>⚖ Official Panel</h2>
+            <h3>Proposals Awaiting Action</h3>
+            <div id="officialProposals">No pending proposals found.</div>
+        </div>
 
-  <input id="grantOfficialAddress" placeholder="Grant OFFICIAL_ROLE to Address" />
-  <button onclick="grantOfficialRole()">Grant Official Role</button>
+        <div class="role-section">
+            <h2>🙋 Public Section</h2>
+            <form id="submitProposalForm">
+                <h3>Submit a Spending Proposal</h3>
+                <input type="number" id="proposalCatId" placeholder="Budget Category ID" required>
+                <input type="text" id="proposalDesc" placeholder="Proposal Description" required>
+                <input type="text" id="proposalRecipient" placeholder="Recipient Address" required>
+                <input type="text" id="proposalAmount" placeholder="Requested Amount (in Wei)" required>
+                <button type="submit">Submit Proposal</button>
+            </form>
+             <form id="flagProposalForm">
+                <h3>Flag a Suspicious Proposal</h3>
+                <input type="number" id="flagProposalId" placeholder="Proposal ID to Flag" required>
+                <input type="text" id="flagReason" placeholder="Reason for flagging" required>
+                <button type="submit">Flag Proposal</button>
+            </form>
+        </div>
 
-  <input id="revokeOfficialAddress" placeholder="Revoke OFFICIAL_ROLE from Address" />
-  <button onclick="revokeOfficialRole()">Revoke Official Role</button>
-</section>
+        <div class="display-section">
+            <h2>Budget Categories</h2>
+            <div id="categoriesList" class="card-container">Loading...</div>
+        </div>
 
-<section>
-  <h2>Proposal Submission</h2>
-  <input id="proposalCategoryId" placeholder="Budget Category ID" type="number" />
-  <input id="proposalDescription" placeholder="Description" />
-  <input id="proposalRecipient" placeholder="Recipient Address" />
-  <input id="proposalRequestedAmount" placeholder="Requested Amount (ETH)" type="number" step="0.0001" />
-  <button onclick="submitProposal()">Submit Proposal</button>
-</section>
-
-<section>
-  <h2>Official Functions</h2>
-  <input id="proposalId" placeholder="Proposal ID" type="number" />
-  <button onclick="approveProposal()">Approve Proposal</button>
-  <button onclick="rejectProposal()">Reject Proposal</button>
-
-  <input id="milestoneIndex" placeholder="Milestone Index (for funding)" type="number" />
-  <button onclick="fundMilestone()">Fund Milestone</button>
-</section>
-
-<section>
-  <h2>Citizen Actions</h2>
-  <input id="flagProposalId" placeholder="Proposal ID to Flag" type="number" />
-  <input id="flagReason" placeholder="Reason for Flagging" />
-  <button onclick="flagSuspicious()">Flag Suspicious Proposal</button>
-</section>
-
-<section>
-  <h2>Emergency Fund Disbursement</h2>
-  <input id="emergencyProposalId" placeholder="Proposal ID" type="number" />
-  <input id="requiredApprovals" placeholder="Required Approvals Count" type="number" />
-  <button onclick="disburseEmergencyFund()">Disburse Emergency Fund</button>
-</section>
-
-<div id="status" style="margin-top:20px; color: green; font-weight: bold;"></div>
+        <div class="display-section">
+            <h2>All Proposals</h2>
+            <div id="proposalsList" class="card-container">Loading...</div>
+        </div>
+    </div>
 
 <script>
-  // Replace with your deployed contract address
-  const CONTRACT_ADDRESS = "0xYourDeployedContractAddress";
+    // ========== 1. CONFIGURATION ==========
+    // PASTE YOUR DEPLOYED CONTRACT ADDRESS HERE
+    const contractAddress = "0x7EF2e0048f5bAeDe046f6BF797943daF4ED8CB47";
 
-  // ABI matching your smart contract (simplified)
-  const CONTRACT_ABI = [
+    // PASTE YOUR CONTRACT'S ABI HERE
+    // This is a partial ABI for brevity, but you should use the full one from your compilation output.
+    const contractABI =[
 	{
 		"inputs": [],
 		"stateMutability": "nonpayable",
@@ -119,6 +129,91 @@
 		],
 		"name": "AccessControlUnauthorizedAccount",
 		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string[]",
+				"name": "_descriptions",
+				"type": "string[]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "_amounts",
+				"type": "uint256[]"
+			}
+		],
+		"name": "addMilestones",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "approveProposal",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_totalAllocated",
+				"type": "uint256"
+			}
+		],
+		"name": "createBudgetCategory",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "_reason",
+				"type": "string"
+			}
+		],
+		"name": "flagSuspiciousProposal",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_official",
+				"type": "address"
+			}
+		],
+		"name": "grantOfficialRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
 	},
 	{
 		"inputs": [],
@@ -151,6 +246,31 @@
 		"type": "event"
 	},
 	{
+		"inputs": [],
+		"name": "depositFunds",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_requiredApprovals",
+				"type": "uint256"
+			}
+		],
+		"name": "disburseEmergencyFund",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -170,6 +290,24 @@
 		"type": "event"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_milestoneIndex",
+				"type": "uint256"
+			}
+		],
+		"name": "fundMilestone",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -187,6 +325,24 @@
 		],
 		"name": "FundsDeposited",
 		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "grantRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
 	},
 	{
 		"anonymous": false,
@@ -308,6 +464,68 @@
 		"type": "event"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			}
+		],
+		"name": "rejectProposal",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "callerConfirmation",
+				"type": "address"
+			}
+		],
+		"name": "renounceRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_official",
+				"type": "address"
+			}
+		],
+		"name": "revokeOfficialRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "revokeRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -383,77 +601,36 @@
 		"type": "event"
 	},
 	{
-		"inputs": [],
-		"name": "DEFAULT_ADMIN_ROLE",
-		"outputs": [
-			{
-				"internalType": "bytes32",
-				"name": "",
-				"type": "bytes32"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "GOV_ADMIN_ROLE",
-		"outputs": [
-			{
-				"internalType": "bytes32",
-				"name": "",
-				"type": "bytes32"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "OFFICIAL_ROLE",
-		"outputs": [
-			{
-				"internalType": "bytes32",
-				"name": "",
-				"type": "bytes32"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "_proposalId",
+				"name": "_budgetCategoryId",
 				"type": "uint256"
 			},
 			{
-				"internalType": "string[]",
-				"name": "_descriptions",
-				"type": "string[]"
+				"internalType": "string",
+				"name": "_description",
+				"type": "string"
 			},
 			{
-				"internalType": "uint256[]",
-				"name": "_amounts",
-				"type": "uint256[]"
-			}
-		],
-		"name": "addMilestones",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
+				"internalType": "address payable",
+				"name": "_recipient",
+				"type": "address"
+			},
 			{
 				"internalType": "uint256",
-				"name": "_proposalId",
+				"name": "_requestedAmount",
 				"type": "uint256"
 			}
 		],
-		"name": "approveProposal",
-		"outputs": [],
+		"name": "submitProposal",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
 		"stateMutability": "nonpayable",
 		"type": "function"
 	},
@@ -497,71 +674,16 @@
 		"type": "function"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "string",
-				"name": "_name",
-				"type": "string"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_totalAllocated",
-				"type": "uint256"
-			}
-		],
-		"name": "createBudgetCategory",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"inputs": [],
-		"name": "depositFunds",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
-	},
-	{
-		"inputs": [
+		"name": "DEFAULT_ADMIN_ROLE",
+		"outputs": [
 			{
-				"internalType": "uint256",
-				"name": "_proposalId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_requiredApprovals",
-				"type": "uint256"
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
 			}
 		],
-		"name": "disburseEmergencyFund",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "emergencyWithdraw",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_proposalId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "_reason",
-				"type": "string"
-			}
-		],
-		"name": "flagSuspiciousProposal",
-		"outputs": [],
-		"stateMutability": "nonpayable",
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -594,37 +716,6 @@
 				"internalType": "uint256",
 				"name": "_proposalId",
 				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_milestoneIndex",
-				"type": "uint256"
-			}
-		],
-		"name": "fundMilestone",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "getContractBalance",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_proposalId",
-				"type": "uint256"
 			}
 		],
 		"name": "getFlaggedReasons",
@@ -633,32 +724,6 @@
 				"internalType": "string[]",
 				"name": "",
 				"type": "string[]"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "getNextCategoryId",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "getNextProposalId",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -750,42 +815,6 @@
 	{
 		"inputs": [
 			{
-				"internalType": "uint256",
-				"name": "_proposalId",
-				"type": "uint256"
-			}
-		],
-		"name": "getProposalMilestones",
-		"outputs": [
-			{
-				"components": [
-					{
-						"internalType": "string",
-						"name": "description",
-						"type": "string"
-					},
-					{
-						"internalType": "uint256",
-						"name": "amount",
-						"type": "uint256"
-					},
-					{
-						"internalType": "bool",
-						"name": "funded",
-						"type": "bool"
-					}
-				],
-				"internalType": "struct TransparentGovernmentBudget.Milestone[]",
-				"name": "",
-				"type": "tuple[]"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
 				"internalType": "bytes32",
 				"name": "role",
 				"type": "bytes32"
@@ -803,34 +832,16 @@
 		"type": "function"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "_official",
-				"type": "address"
-			}
-		],
-		"name": "grantOfficialRole",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
+		"inputs": [],
+		"name": "GOV_ADMIN_ROLE",
+		"outputs": [
 			{
 				"internalType": "bytes32",
-				"name": "role",
+				"name": "",
 				"type": "bytes32"
-			},
-			{
-				"internalType": "address",
-				"name": "account",
-				"type": "address"
 			}
 		],
-		"name": "grantRole",
-		"outputs": [],
-		"stateMutability": "nonpayable",
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -852,6 +863,19 @@
 				"internalType": "bool",
 				"name": "",
 				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "OFFICIAL_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
 			}
 		],
 		"stateMutability": "view",
@@ -972,102 +996,6 @@
 	{
 		"inputs": [
 			{
-				"internalType": "uint256",
-				"name": "_proposalId",
-				"type": "uint256"
-			}
-		],
-		"name": "rejectProposal",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "role",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "address",
-				"name": "callerConfirmation",
-				"type": "address"
-			}
-		],
-		"name": "renounceRole",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "_official",
-				"type": "address"
-			}
-		],
-		"name": "revokeOfficialRole",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "role",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "address",
-				"name": "account",
-				"type": "address"
-			}
-		],
-		"name": "revokeRole",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_budgetCategoryId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "_description",
-				"type": "string"
-			},
-			{
-				"internalType": "address payable",
-				"name": "_recipient",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_requestedAmount",
-				"type": "uint256"
-			}
-		],
-		"name": "submitProposal",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
 				"internalType": "bytes4",
 				"name": "interfaceId",
 				"type": "bytes4"
@@ -1083,247 +1011,191 @@
 		],
 		"stateMutability": "view",
 		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_categoryId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_newAllocation",
-				"type": "uint256"
-			}
-		],
-		"name": "updateBudgetAllocation",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"stateMutability": "payable",
-		"type": "receive"
 	}
 ];
 
-  let provider, signer, contract;
-  let roles = {};
+    // ========== 2. GLOBAL VARIABLES ==========
+    let provider;
+    let signer;
+    let contract;
+    const statusEl = document.getElementById('status');
+    const proposalStatusEnum = ["PENDING", "APPROVED", "REJECTED", "COMPLETED"];
 
-  async function connectWallet() {
-    try {
-      if (!window.ethereum) {
-        alert("MetaMask or compatible wallet is required");
-        return;
-      }
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      signer = provider.getSigner();
-      contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+    // ========== 3. CORE FUNCTIONS ==========
+    async function connectWallet() {
+        if (typeof window.ethereum === 'undefined') {
+            alert('MetaMask is not installed!');
+            return;
+        }
+        try {
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            await provider.send("eth_requestAccounts", []);
+            signer = provider.getSigner();
+            contract = new ethers.Contract(contractAddress, contractABI, signer);
 
-      const account = await signer.getAddress();
-      document.getElementById("account").innerText = Connected: ${account};
+            const address = await signer.getAddress();
+            document.getElementById('walletInfo').innerText = Connected: ${address.substring(0, 6)}...${address.substring(address.length - 4)};
+            document.getElementById('connectWalletBtn').innerText = 'Connected';
+            statusEl.innerText = 'Wallet connected. Loading data...';
+            
+            await checkUserRoles(address);
+            await loadAllData();
 
-      // Fetch roles bytes32 values from contract for local checks if needed
-      roles.govAdmin = await contract.GOV_ADMIN_ROLE();
-      roles.official = await contract.OFFICIAL_ROLE();
-
-      setStatus("Wallet connected and contract ready.");
-    } catch (error) {
-      setStatus(Error connecting wallet: ${error.message}, true);
+        } catch (error) {
+            console.error("Failed to connect wallet:", error);
+            alert(Error: ${error.message});
+        }
     }
-  }
 
-  function setStatus(message, isError = false) {
-    const statusEl = document.getElementById("status");
-    statusEl.style.color = isError ? "red" : "green";
-    statusEl.innerText = message;
-  }
+    async function checkUserRoles(address) {
+        try {
+            const GOV_ADMIN_ROLE = await contract.GOV_ADMIN_ROLE();
+            const OFFICIAL_ROLE = await contract.OFFICIAL_ROLE();
 
-  async function createBudgetCategory() {
-    try {
-      const name = document.getElementById("budgetName").value.trim();
-      const amountEth = document.getElementById("budgetAmount").value.trim();
-      if (!name || !amountEth) {
-        setStatus("Please provide category name and amount.", true);
-        return;
-      }
-      const amount = ethers.utils.parseEther(amountEth);
-      const tx = await contract.createBudgetCategory(name, amount);
-      await tx.wait();
-      setStatus("Budget category created successfully.");
-    } catch (error) {
-      setStatus(Error creating budget category: ${parseErrorMessage(error)}, true);
+            const isAdmin = await contract.hasRole(GOV_ADMIN_ROLE, address);
+            const isOfficial = await contract.hasRole(OFFICIAL_ROLE, address);
+
+            if (isAdmin) {
+                document.getElementById('adminSection').classList.remove('hidden');
+            }
+            if (isOfficial) {
+                document.getElementById('officialSection').classList.remove('hidden');
+            }
+        } catch (e) {
+            console.error("Could not check roles", e);
+            statusEl.innerText = "Error checking roles. Is the contract address and ABI correct?";
+        }
     }
-  }
 
-  async function depositFunds() {
-    try {
-      const amountEth = document.getElementById("depositAmount").value.trim();
-      if (!amountEth) {
-        setStatus("Please enter deposit amount.", true);
-        return;
-      }
-      const amount = ethers.utils.parseEther(amountEth);
-      const tx = await contract.depositFunds({ value: amount });
-      await tx.wait();
-      setStatus("Funds deposited successfully.");
-    } catch (error) {
-      setStatus(Error depositing funds: ${parseErrorMessage(error)}, true);
+    async function loadAllData() {
+        if (!contract) return;
+        await loadProposals();
+        // You would add loadBudgetCategories() here if needed. For now, it's displayed within loadProposals.
     }
-  }
+    
+    async function loadProposals() {
+        const proposalsList = document.getElementById('proposalsList');
+        const officialProposals = document.getElementById('officialProposals');
+        proposalsList.innerHTML = '';
+        officialProposals.innerHTML = '';
+        let pendingOfficialProposals = 0;
 
-  async function grantOfficialRole() {
-    try {
-      const addr = document.getElementById("grantOfficialAddress").value.trim();
-      if (!ethers.utils.isAddress(addr)) {
-        setStatus("Invalid address for granting role.", true);
-        return;
-      }
-      const tx = await contract.grantOfficialRole(addr);
-      await tx.wait();
-      setStatus("Official role granted.");
-    } catch (error) {
-      setStatus(Error granting official role: ${parseErrorMessage(error)}, true);
+        // Note: Iterating mappings isn't straightforward. This pattern works if IDs are sequential.
+        let i = 1;
+        while (true) {
+            try {
+                const p = await contract.proposals(i);
+                if (p.proposalId.toString() === "0") {
+                    break; // Reached end of proposals
+                }
+                
+                const status = proposalStatusEnum[p.status];
+                const card = `
+                    <div class="card">
+                        <p><strong>ID:</strong> ${p.proposalId.toString()}</p>
+                        <p><strong>Description:</strong> ${p.description}</p>
+                        <p><strong>Recipient:</strong> ${p.recipient}</p>
+                        <p><strong>Amount (Wei):</strong> ${p.requestedAmount.toString()}</p>
+                        <p><strong>Status:</strong> <span class="status-${status}">${status}</span></p>
+                    </div>`;
+                proposalsList.insertAdjacentHTML('beforeend', card);
+
+                if (status === "PENDING") {
+                    pendingOfficialProposals++;
+                    const officialCard = `
+                        <div class="card">
+                            <p><strong>ID:</strong> ${p.proposalId.toString()}</p>
+                            <p><strong>Description:</strong> ${p.description}</p>
+                             <button onclick="approveProposal(${p.proposalId})">Approve</button>
+                             <button style="background-color:#c0392b" onclick="rejectProposal(${p.proposalId})">Reject</button>
+                        </div>`;
+                    officialProposals.insertAdjacentHTML('beforeend', officialCard);
+                }
+
+                i++;
+            } catch (error) {
+                // This error likely means we've tried an ID that doesn't exist yet.
+                break;
+            }
+        }
+        if(pendingOfficialProposals === 0) {
+            officialProposals.innerHTML = "No pending proposals found.";
+        }
     }
-  }
 
-  async function revokeOfficialRole() {
-    try {
-      const addr = document.getElementById("revokeOfficialAddress").value.trim();
-      if (!ethers.utils.isAddress(addr)) {
-        setStatus("Invalid address for revoking role.", true);
-        return;
-      }
-      const tx = await contract.revokeOfficialRole(addr);
-      await tx.wait();
-      setStatus("Official role revoked.");
-    } catch (error) {
-      setStatus(Error revoking official role: ${parseErrorMessage(error)}, true);
+    async function handleTransaction(txPromise, successMessage) {
+        statusEl.innerText = 'Sending transaction... please wait.';
+        try {
+            const tx = await txPromise;
+            statusEl.innerText = 'Transaction sent! Waiting for confirmation...';
+            await tx.wait();
+            statusEl.innerText = successMessage;
+            await loadAllData(); // Refresh data
+        } catch (error) {
+            console.error("Transaction failed:", error);
+            statusEl.innerText = Error: ${error.data ? error.data.message : error.message};
+        }
     }
-  }
 
-  async function submitProposal() {
-    try {
-      const categoryId = document.getElementById("proposalCategoryId").value.trim();
-      const description = document.getElementById("proposalDescription").value.trim();
-      const recipient = document.getElementById("proposalRecipient").value.trim();
-      const amountEth = document.getElementById("proposalRequestedAmount").value.trim();
+    // ========== 4. EVENT HANDLERS & CONTRACT CALLS ==========
+    
+    // --- Admin ---
+    document.getElementById('depositForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const amount = document.getElementById('depositAmount').value;
+        const txPromise = contract.depositFunds({ value: ethers.utils.parseEther(amount) });
+        await handleTransaction(txPromise, Successfully deposited ${amount} ETH.);
+    });
+    
+    document.getElementById('createCategoryForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('categoryName').value;
+        const allocation = document.getElementById('categoryAllocation').value;
+        const txPromise = contract.createBudgetCategory(name, allocation);
+        await handleTransaction(txPromise, Category "${name}" created.);
+    });
 
-      if (!categoryId || !description || !recipient || !amountEth) {
-        setStatus("Please fill in all proposal fields.", true);
-        return;
-      }
-      if (!ethers.utils.isAddress(recipient)) {
-        setStatus("Invalid recipient address.", true);
-        return;
-      }
+    document.getElementById('grantRoleForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const address = document.getElementById('officialAddress').value;
+        const txPromise = contract.grantOfficialRole(address);
+        await handleTransaction(txPromise, Granted OFFICIAL_ROLE to ${address}.);
+    });
 
-      const amount = ethers.utils.parseEther(amountEth);
-
-      const tx = await contract.submitProposal(
-        Number(categoryId),
-        description,
-        recipient,
-        amount
-      );
-      await tx.wait();
-      setStatus("Proposal submitted successfully.");
-    } catch (error) {
-      setStatus(Error submitting proposal: ${parseErrorMessage(error)}, true);
+    // --- Official ---
+    async function approveProposal(proposalId) {
+        const txPromise = contract.approveProposal(proposalId);
+        await handleTransaction(txPromise, Proposal #${proposalId} approved.);
     }
-  }
 
-  async function approveProposal() {
-    try {
-      const proposalId = document.getElementById("proposalId").value.trim();
-      if (!proposalId) {
-        setStatus("Please provide proposal ID.", true);
-        return;
-      }
-      const tx = await contract.approveProposal(Number(proposalId));
-      await tx.wait();
-      setStatus("Proposal approved successfully.");
-    } catch (error) {
-      setStatus(Error approving proposal: ${parseErrorMessage(error)}, true);
+    async function rejectProposal(proposalId) {
+        const txPromise = contract.rejectProposal(proposalId);
+        await handleTransaction(txPromise, Proposal #${proposalId} rejected.);
     }
-  }
 
-  async function rejectProposal() {
-    try {
-      const proposalId = document.getElementById("proposalId").value.trim();
-      if (!proposalId) {
-        setStatus("Please provide proposal ID.", true);
-        return;
-      }
-      const tx = await contract.rejectProposal(Number(proposalId));
-      await tx.wait();
-      setStatus("Proposal rejected successfully.");
-    } catch (error) {
-      setStatus(Error rejecting proposal: ${parseErrorMessage(error)}, true);
-    }
-  }
+    // --- Public ---
+    document.getElementById('submitProposalForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const catId = document.getElementById('proposalCatId').value;
+        const desc = document.getElementById('proposalDesc').value;
+        const recipient = document.getElementById('proposalRecipient').value;
+        const amount = document.getElementById('proposalAmount').value;
+        const txPromise = contract.submitProposal(catId, desc, recipient, amount);
+        await handleTransaction(txPromise, "Proposal submitted successfully!");
+    });
+    
+    document.getElementById('flagProposalForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const proposalId = document.getElementById('flagProposalId').value;
+        const reason = document.getElementById('flagReason').value;
+        const txPromise = contract.flagSuspiciousProposal(proposalId, reason);
+        await handleTransaction(txPromise, Proposal #${proposalId} flagged.);
+    });
+    
 
-  async function fundMilestone() {
-    try {
-      const proposalId = document.getElementById("proposalId").value.trim();
-      const milestoneIndex = document.getElementById("milestoneIndex").value.trim();
-      if (!proposalId || milestoneIndex === '') {
-        setStatus("Please provide proposal ID and milestone index.", true);
-        return;
-      }
-      const tx = await contract.fundMilestone(Number(proposalId), Number(milestoneIndex));
-      await tx.wait();
-      setStatus("Milestone funded successfully.");
-    } catch (error) {
-      setStatus(Error funding milestone: ${parseErrorMessage(error)}, true);
-    }
-  }
+    // ========== 5. INITIALIZATION ==========
+    document.getElementById('connectWalletBtn').addEventListener('click', connectWallet);
 
-  async function flagSuspicious() {
-    try {
-      const proposalId = document.getElementById("flagProposalId").value.trim();
-      const reason = document.getElementById("flagReason").value.trim();
-      if (!proposalId || !reason) {
-        setStatus("Please provide proposal ID and reason.", true);
-        return;
-      }
-      const tx = await contract.flagSuspiciousProposal(Number(proposalId), reason);
-      await tx.wait();
-      setStatus("Proposal flagged successfully.");
-    } catch (error) {
-      setStatus(Error flagging proposal: ${parseErrorMessage(error)}, true);
-    }
-  }
-
-  async function disburseEmergencyFund() {
-    try {
-      const proposalId = document.getElementById("emergencyProposalId").value.trim();
-      const requiredApprovals = document.getElementById("requiredApprovals").value.trim();
-      if (!proposalId || !requiredApprovals) {
-        setStatus("Please provide proposal ID and required approvals.", true);
-        return;
-      }
-      const tx = await contract.disburseEmergencyFund(Number(proposalId), Number(requiredApprovals));
-      await tx.wait();
-      setStatus("Emergency fund disbursed successfully.");
-    } catch (error) {
-      setStatus(Error disbursing emergency fund: ${parseErrorMessage(error)}, true);
-    }
-  }
-
-  // Utility to parse revert reasons from error object
-  function parseErrorMessage(error) {
-    if (error.error && error.error.message) {
-      return error.error.message;
-    }
-    if (error.data && error.data.message) {
-      return error.data.message;
-    }
-    return error.message || String(error);
-  }
 </script>
-
 </body>
 </html>
